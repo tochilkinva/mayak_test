@@ -3,7 +3,8 @@
 Стэк: aiogram, aiosqlite, pandas
 
 Алгоритм работы
-1.	Пользователь отправляет файл excel в формате xlsx (название, URL, xpath запрос)
+1.	Пользователь отправляет файл excel в формате xlsx:
+    (название, URL, xpath запрос)
 2.	Бот получает файл, сохраняет
 3.	Открывает файл библиотекой pandas
 4.	Выводит содержимое в ответ пользователю
@@ -31,10 +32,10 @@ logging.basicConfig(
     level=logging.DEBUG,
 )
 
+
 class AIODatabase():
     def __init__(self) -> None:
         pass
-
 
     async def create_db(self) -> None:
         """
@@ -43,13 +44,14 @@ class AIODatabase():
         async with aiosqlite.connect('mayak.db') as db:
             # таблица для задач
             await db.execute('CREATE TABLE IF NOT EXISTS tasks'
-                            '(name TEXT UNIQUE, url TEXT, xpath_request TEXT)')
+                             '(name TEXT UNIQUE, url TEXT, '
+                             ' xpath_request TEXT)')
             # таблица для хранения результатов
             await db.execute('CREATE TABLE IF NOT EXISTS results'
-                            '(task_id INTEGER, name TEXT, price REAL, '
-                            'FOREIGN KEY (task_id) REFERENCES tasks (task_id))')
+                             '(task_id INTEGER, name TEXT, price REAL, '
+                             'FOREIGN KEY (task_id) '
+                             'REFERENCES tasks (task_id))')
             await db.commit()
-
 
     async def save_task_to_db(self, name, url, xpath_request) -> None:
         """
@@ -57,12 +59,12 @@ class AIODatabase():
         """
         async with aiosqlite.connect('mayak.db') as db:
             try:
-                await db.execute('INSERT OR REPLACE INTO tasks VALUES (?, ?, ?)',
-                                (name, url, xpath_request))
+                await db.execute('INSERT OR REPLACE INTO tasks VALUES'
+                                 ' (?, ?, ?)',
+                                 (name, url, xpath_request))
                 await db.commit()
             except Exception as e:
                 logging.error(f'Ошибка сохранения в базу: {e}')
-
 
     async def load_task_from_db(self) -> dict:
         """
@@ -79,53 +81,32 @@ class AIODatabase():
 
         return result
 
-
     async def save_result_to_db(self, name, url, xpath_request) -> None:
         """
         Сохраняем result в базу
         """
-        # async with aiosqlite.connect('mayak.db') as db:
-        #     try:
-        #         await db.execute('INSERT INTO tasks VALUES (?, ?, ?)',
-        #                          (name, url, xpath_request))
-        #         await db.commit()
-        #     except Exception as e:
-        #         logging.error(f'Ошибка сохранения в базу: {e}')
         print('save_result_to_db')
 
-
     async def load_result_from_db(self) -> dict:
-        # """
-        # Загружаем 5 записей result из базы
-        # :return: None or dict[id]: (name, url, xpath_request)
-        # """
-        # result = {}
-        # async with aiosqlite.connect('mayak.db') as db:
-        #     async with db.execute('SELECT * FROM tasks LIMIT 5') as cursor:
-        #         async for row in cursor:
-        #             result[row[0]] = (row[1], row[2], row[3])
-        # if result == {}:
-        #     raise Exception('Не удалось загрузить записи из базы')
-
-        # return result
         print('load_result_from_db')
 
 
 aiodb = AIODatabase()
 
-def get_tasks_from_file(filename:str='data.xlsx') -> list:
+
+def get_tasks_from_file(filename: str) -> list:
     """
     Читаем файл и отдаем список задач
     """
     try:
         sheet = pd.read_excel(filename)
     except Exception as e:
-            logging.error(f'Ошибка открытия файла: {e}')
-            raise Exception(f'Ошибка открытия файла: {e}')
+        logging.error(f'Ошибка открытия файла: {e}')
+        raise Exception(f'Ошибка открытия файла: {e}')
     return sheet.values.tolist()
 
 
-def tasks_list_to_str(tasks_list:list) -> str:
+def tasks_list_to_str(tasks_list: list) -> str:
     """
     Переводим список задач в строку с переносами строк
     """
@@ -135,7 +116,7 @@ def tasks_list_to_str(tasks_list:list) -> str:
     return '\n'.join(tasks)
 
 
-async def save_tasks_to_db(tasks_list:list) -> None:
+async def save_tasks_to_db(tasks_list: list) -> None:
     """
     Сохраняем список задач в базу
     """
@@ -151,27 +132,26 @@ async def save_tasks_to_db(tasks_list:list) -> None:
 @dp.message_handler(commands='test')
 async def cmd_test(message: types.Message):
     await message.answer("test")
-    #+ 3. Открывает файл библиотекой pandas
+    # 3. Открывает файл библиотекой pandas
     tasks_list = get_tasks_from_file('data.xlsx')
-    #+ 4. Выводит содержимое в ответ пользователю
+    # 4. Выводит содержимое в ответ пользователю
     text = tasks_list_to_str(tasks_list)
     await message.answer(text)
-    #+ 5. Сохраняет содержимое в локальную бд sqlite
+    # 5. Сохраняет содержимое в локальную бд sqlite
     await save_tasks_to_db(tasks_list)
     # test = await aiodb.load_task_from_db()
     # print(test)
 
     await message.answer("test done")
-    #- 6. парсит данные?
-
+    # 6. парсит данные?
 
 
 @dp.message_handler(content_types=types.ContentType.DOCUMENT)
 async def file_handler(message: types.Message):
     """
-    Обработчик получения файла и сохранения задачи в базе 
+    Обработчик получения файла и сохранения задачи в базе
     """
-    #+ 2. Бот получает файл excel, сохраняет
+    # 2. Бот получает файл excel, сохраняет
     try:
         file_id = message.document.file_id
         file_name = message.document.file_name
@@ -190,23 +170,22 @@ async def file_handler(message: types.Message):
     await bot.download_file(file_path, file_name)
     await message.reply("Бот получил файл")
 
-    #+ 3. Открывает файл библиотекой pandas
+    # 3. Открывает файл библиотекой pandas
     tasks_list = get_tasks_from_file(file_name)
-    #+ 4. Выводит содержимое в ответ пользователю
+    # 4. Выводит содержимое в ответ пользователю
     text = tasks_list_to_str(tasks_list)
     await message.answer(text)
-    #+ 5. Сохраняет содержимое в локальную бд sqlite
+    # 5. Сохраняет содержимое в локальную бд sqlite
     await save_tasks_to_db(tasks_list)
     await message.answer("Задания сохранены")
-    #- 6. парсит данные?
-
+    # 6. парсит данные?
 
 
 @dp.message_handler(commands="start")
 async def cmd_start(message: types.Message):
     await message.answer(
         "Бот для парсинга сайтов. "
-        "Пришлите файл excel в формате: название, URL, xpath запрос."
+        "Пришлите файл excel в формате xlsx: название, URL, xpath запрос."
     )
 
 
