@@ -9,6 +9,8 @@
 3.	Открывает файл библиотекой pandas
 4.	Выводит содержимое в ответ пользователю
 5.	Сохраняет содержимое в локальную бд sqlite
+
+Команда /parse запускает парсинг по 3 заданиям и сохраняет результат в базу
 """
 
 import logging
@@ -18,6 +20,7 @@ import aiosqlite
 import pandas as pd
 from aiogram import Bot, Dispatcher, executor, types
 from dotenv import load_dotenv
+from parsing import get_goods
 
 load_dotenv()
 
@@ -48,12 +51,11 @@ class AIODatabase():
                              ' xpath_request TEXT)')
             # таблица для хранения результатов
             await db.execute('CREATE TABLE IF NOT EXISTS results'
-                             '(task_id INTEGER, name TEXT, price REAL, '
-                             'FOREIGN KEY (task_id) '
-                             'REFERENCES tasks (task_id))')
+                             '(name TEXT, price TEXT)'
+                            )
             await db.commit()
 
-    async def save_task_to_db(self, name, url, xpath_request) -> None:
+    async def save_task_to_db(self, name: str, url: str, xpath_request: str) -> None:
         """
         Сохраняем task в базу
         """
@@ -81,11 +83,20 @@ class AIODatabase():
 
         return result
 
-    async def save_result_to_db(self, name, url, xpath_request) -> None:
+    async def save_result_to_db(self, name: str, price: str) -> None:
         """
         Сохраняем result в базу
         """
-        print('save_result_to_db')
+        async with aiosqlite.connect('mayak.db') as db:
+            try:
+                await db.execute('INSERT OR REPLACE INTO results VALUES'
+                                 ' (?, ?)',
+                                 (name, price)
+                                )
+                await db.commit()
+            except Exception as e:
+                logging.error(f'Ошибка сохранения в базу: {e}')
+
 
     async def load_result_from_db(self) -> dict:
         print('load_result_from_db')
@@ -141,9 +152,32 @@ async def cmd_test(message: types.Message):
     await save_tasks_to_db(tasks_list)
     # test = await aiodb.load_task_from_db()
     # print(test)
-
     await message.answer("test done")
-    # 6. парсит данные?
+
+
+@dp.message_handler(commands='parse')
+async def cmd_parse(message: types.Message):
+    """
+    Обработчик для запуска парсинга и сохранения результата в базе
+    """
+    await message.answer("Парсинг запущен")
+    # загрузка заданий из базы
+    tasks_dict = await aiodb.load_task_from_db() 
+    # парсинг задания
+    goods = {}
+    for task_name, task_values in tasks_dict.items():
+        try:
+            new_goods = get_goods(task_name, task_values[0], task_values[1])
+            goods.update(new_goods)
+        except Exception as e:
+            await message.reply('Ошибка парсинга в {task_name}')
+            logging.error(f'Ошибка парсинга в {task_name}')
+
+    # сохранение результатов в базу
+    for good_name, good_price in goods.items():
+        await aiodb.save_result_to_db(good_name, good_price)
+
+    await message.answer("Результаты парсинга сохранены")
 
 
 @dp.message_handler(content_types=types.ContentType.DOCUMENT)
@@ -158,7 +192,7 @@ async def file_handler(message: types.Message):
         file = await bot.get_file(file_id)
         file_path = file.file_path
     except Exception as e:
-        await message.answer('Ошибка при скачивании файла: {e}')
+        await message.reply('Ошибка при скачивании файла: {e}')
         logging.error(f'Ошибка сохранения в базу: {e}')
         return None
 
@@ -178,7 +212,6 @@ async def file_handler(message: types.Message):
     # 5. Сохраняет содержимое в локальную бд sqlite
     await save_tasks_to_db(tasks_list)
     await message.answer("Задания сохранены")
-    # 6. парсит данные?
 
 
 @dp.message_handler(commands="start")
